@@ -15,15 +15,17 @@ from the first. `dev` and `qa` are the only branches added on top of it.
 | Branch | GitHub Environment | Typical use |
 |---|---|---|
 | `dev`  | `dev`  | Every push auto-deploys. Break things here. |
-| `qa`   | `qa`   | Promoted from `dev` via PR once CI is green. Test signoff happens here. |
-| `main` | `prod` | Promoted from `qa` via PR. Should require manual approval before deploy (see below). |
+| `qa`   | `qa`   | Every push auto-deploys once CI passes. No review gate. |
+| `main` | `prod` | Every push auto-deploys once CI passes. No review gate by default (see below if you want one later). |
 
 Pushing to any of these three branches triggers `.github/workflows/deploy.yml`,
 which runs the full CI suite (`ci.yml`) first, then builds and pushes a
 Docker image to GHCR and SSHes into the matching environment's server to
-redeploy. If CI fails, nothing gets built or deployed. The workflow maps
-`main` -> the `prod` GitHub Environment (and image tag `:prod`) explicitly,
-since the branch name and the environment name intentionally differ here.
+redeploy. If CI fails, nothing gets built or deployed — that's the only
+gate; there's no PR review or manual approval step anywhere by default.
+The workflow maps `main` -> the `prod` GitHub Environment (and image tag
+`:prod`) explicitly, since the branch name and the environment name
+intentionally differ here.
 
 ## One-time setup (you do this, not me)
 
@@ -63,29 +65,33 @@ And optionally this **variable** (not secret):
 |---|---|
 | `OLLAMA_MODEL` | model to auto-pull after deploy, e.g. `gemma4:latest`. Defaults to `gemma4:latest` if unset. |
 
-### 3. Require manual approval before prod deploys (recommended)
-
-Repo Settings > Environments > `prod` > **Required reviewers** — add
-yourself or a teammate. GitHub will then pause the `deploy` job on every
-push to `main` until someone approves it in the Actions UI — this is a
-second, deploy-time gate on top of the branch-protection PR review.
-
-### 4. Enable branch protection / required status checks
+### 3. Enable branch protection / required status checks
 
 Run `scripts/setup-branch-protection.sh <owner>/<repo>` from a machine with
 `gh` authenticated as a repo admin. It requires the `Lint & test` and
-`Docker image builds` CI jobs to pass before any PR can merge into
-dev/qa/main, plus a review requirement on qa/main. See the script itself for
-exactly what it sets and what you still have to do by hand (Environments
-aren't settable via the branch-protection API).
+`Docker image builds` CI jobs to pass before anything lands on dev/qa/main
+— no PR review requirement, no human approval anywhere. Direct pushes are
+allowed as long as CI is green. See the script itself for exactly what it
+sets and what you still have to do by hand (Environments aren't settable
+via the branch-protection API).
+
+### 4. (Optional) Add a manual approval gate on prod later
+
+Not set up by default, since nobody's signed up to be the reviewer. If you
+ever want one: Repo Settings > Environments > `prod` > **Required
+reviewers** — GitHub will then pause the `deploy` job on every push to
+`main` until someone approves it in the Actions UI.
 
 ## Promotion flow
 
 ```
-feature branch → PR → dev    (CI required)
-dev             → PR → qa    (CI + 1 review required)
-qa              → PR → main  (CI + 1 review required + manual deploy approval)
+dev   → push, CI required, auto-deploys
+qa    → push, CI required, auto-deploys, no review
+main  → push, CI required, auto-deploys, no review  (= prod)
 ```
+
+There's no PR-and-wait-for-approval step baked in anywhere — CI passing is
+the only thing standing between a push and a live deploy, on every branch.
 
 ## First deploy / redeploy manually
 

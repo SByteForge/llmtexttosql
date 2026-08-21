@@ -91,11 +91,11 @@ an earlier stage.
 
 ```mermaid
 flowchart LR
-    subgraph promote["Promotion flow"]
+    subgraph promote["Promotion flow - CI-gated, no review required"]
         direction LR
-        Feature["feature branch"] -->|PR, CI required| Dev["dev"]
-        Dev -->|PR, CI + 1 review| QA["qa"]
-        QA -->|PR, CI + 1 review| Main["main (= prod)"]
+        Feature["feature branch"] -->|push, CI required| Dev["dev"]
+        Dev -->|push, CI required| QA["qa"]
+        QA -->|push, CI required| Main["main (= prod)"]
     end
 
     Dev -.push.-> CID["CI: lint, test,\ndocker build"]
@@ -104,7 +104,7 @@ flowchart LR
 
     CID -->|pass| DeployD["Deploy job\nenv: dev secrets"]
     CIQ -->|pass| DeployQ["Deploy job\nenv: qa secrets"]
-    CIP -->|pass + manual approval| DeployP["Deploy job\nenv: prod secrets\n(main -> prod)"]
+    CIP -->|pass| DeployP["Deploy job\nenv: prod secrets\n(main -> prod)"]
 
     DeployD --> GHCR[("ghcr.io image:dev")]
     DeployQ --> GHCR2[("ghcr.io image:qa")]
@@ -121,15 +121,23 @@ live" claim that can silently drift from the first; `main` already carries
 that meaning by GitHub convention, so the pipeline builds on it instead of
 duplicating it.
 
+**No human approval gate anywhere, by design.** CI passing is the only
+thing standing between a push and a live deploy on every branch, including
+`main`. A push straight to `main` deploys straight to prod once
+`lint-and-test` and `docker-build` are green — there's no PR review
+requirement and no required-reviewer approval on the `prod` Environment.
+That's a deliberate trade-off for a solo/small-team setup where nobody's
+signed up to be the reviewer; `docs/DEPLOYMENT.md` notes how to add a
+manual approval gate later if that changes.
+
 Every push to `dev`/`qa`/`main` re-runs the same `ci.yml` checks
 (`lint-and-test`, `docker-build`) via `workflow_call` before `deploy.yml`'s
 `deploy` job is allowed to run — so "passed CI" means the identical thing
 whether it happened via a PR or a direct push. The `deploy` job resolves
 `main` → the `prod` GitHub Environment explicitly (branch name and
 environment name differ on purpose here); `dev`/`qa` map straight through.
-That environment binding is what scopes secrets per-branch and (on `prod`)
-enforces the required-reviewers gate — see `docs/DEPLOYMENT.md` for the
-exact GitHub settings.
+That environment binding is what scopes secrets per-branch — see
+`docs/DEPLOYMENT.md` for the exact GitHub settings.
 
 ## Where each piece sits (component inventory)
 
