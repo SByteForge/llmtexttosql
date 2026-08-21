@@ -1,0 +1,16 @@
+database:
+  # Overridden by the DB_TYPE env var when set. "sqlite" needs no setup and
+  # is seeded automatically; "mysql" reads DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME.
+  type: sqlite
+  sqlite_path: src/data/demo.db
+  sample_rows_in_table_info: 3
+  max_result_rows: 200
+
+llm:
+  # Any model you've pulled with `ollama pull <model>`.
+  model: gemma4:latest
+  base_url: http://localhost:11434
+  num_predict: 1024
+
+app:
+  title: "Skillcrub Database Q/A App"

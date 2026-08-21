@@ -1,1 +1,20 @@
 .llmtexttosql/
+
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# local demo database
+src/data/*.db
+
+# streamlit
+.streamlit/secrets.toml
+
+# testing
+.pytest_cache/
+
