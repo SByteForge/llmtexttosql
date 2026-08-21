@@ -5,6 +5,8 @@
 Each environment (`dev`/`qa`/`prod`) is its own VPS running two containers
 via Docker Compose. Nothing is shared between environments except the
 container image (same image, different tag, promoted branch by branch).
+The `prod` environment is deployed from the `main` branch — there is no
+separate `prod` branch (see the CI/CD section below for why).
 
 ```mermaid
 flowchart TB
@@ -93,16 +95,16 @@ flowchart LR
         direction LR
         Feature["feature branch"] -->|PR, CI required| Dev["dev"]
         Dev -->|PR, CI + 1 review| QA["qa"]
-        QA -->|PR, CI + 1 review| Prod["prod"]
+        QA -->|PR, CI + 1 review| Main["main (= prod)"]
     end
 
     Dev -.push.-> CID["CI: lint, test,\ndocker build"]
     QA -.push.-> CIQ["CI: lint, test,\ndocker build"]
-    Prod -.push.-> CIP["CI: lint, test,\ndocker build"]
+    Main -.push.-> CIP["CI: lint, test,\ndocker build"]
 
     CID -->|pass| DeployD["Deploy job\nenv: dev secrets"]
     CIQ -->|pass| DeployQ["Deploy job\nenv: qa secrets"]
-    CIP -->|pass + manual approval| DeployP["Deploy job\nenv: prod secrets"]
+    CIP -->|pass + manual approval| DeployP["Deploy job\nenv: prod secrets\n(main -> prod)"]
 
     DeployD --> GHCR[("ghcr.io image:dev")]
     DeployQ --> GHCR2[("ghcr.io image:qa")]
@@ -113,13 +115,21 @@ flowchart LR
     GHCR3 --> VPSP["prod VPS\ndocker compose up"]
 ```
 
-Every push to `dev`/`qa`/`prod` re-runs the same `ci.yml` checks
+**There is no separate `prod` branch — `main` is prod.** A standalone
+`prod` branch alongside `main` would just be a second "this is what's
+live" claim that can silently drift from the first; `main` already carries
+that meaning by GitHub convention, so the pipeline builds on it instead of
+duplicating it.
+
+Every push to `dev`/`qa`/`main` re-runs the same `ci.yml` checks
 (`lint-and-test`, `docker-build`) via `workflow_call` before `deploy.yml`'s
 `deploy` job is allowed to run — so "passed CI" means the identical thing
-whether it happened via a PR or a direct push. The `deploy` job's
-`environment: ${{ github.ref_name }}` binding is what scopes secrets
-per-branch and (on `prod`) enforces the required-reviewers gate — see
-`docs/DEPLOYMENT.md` for the exact GitHub settings.
+whether it happened via a PR or a direct push. The `deploy` job resolves
+`main` → the `prod` GitHub Environment explicitly (branch name and
+environment name differ on purpose here); `dev`/`qa` map straight through.
+That environment binding is what scopes secrets per-branch and (on `prod`)
+enforces the required-reviewers gate — see `docs/DEPLOYMENT.md` for the
+exact GitHub settings.
 
 ## Where each piece sits (component inventory)
 

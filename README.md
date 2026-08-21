@@ -38,10 +38,11 @@ key required.
 
 ## Development, CI/CD, and deployment
 
-Three long-lived branches — `dev` → `qa` → `prod` — each map to their own
-deployed environment and are protected by required CI checks (see
+Three long-lived branches — `dev` → `qa` → `main` — each map to their own
+deployed environment (`dev`/`qa`/`prod`) and are protected by required CI
+checks. `main` is prod; there is no separate `prod` branch. See
 `docs/DEPLOYMENT.md` for the full promotion flow, required secrets, and
-branch protection setup). Full architecture — what runs where, how the
+branch protection setup. Full architecture — what runs where, how the
 pieces talk to each other — is in `docs/ARCHITECTURE.md`.
 
 Run the tests and linter locally the same way CI does:

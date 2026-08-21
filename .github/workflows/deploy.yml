@@ -1,14 +1,15 @@
 name: Deploy
 
-# Fires on every push to dev/qa/prod. The `environment:` on the deploy job
-# is set to the branch name itself, so pushing to `qa` automatically pulls
-# secrets scoped to the "qa" GitHub Environment (Settings > Environments) -
-# each branch only ever sees its own SSH_HOST/SSH_USER/SSH_KEY/DEPLOY_PATH.
+# Fires on every push to dev/qa/main. `main` IS prod - there is no separate
+# `prod` branch, so main stays the single source of truth for what's live.
+# The deploy job maps branch -> GitHub Environment (dev->dev, qa->qa,
+# main->prod) so secrets stay scoped per environment even though the
+# GitHub Environment is named "prod" while the branch is named "main".
 # Add required reviewers on the "prod" Environment to force manual approval
 # before anything reaches production - see docs/DEPLOYMENT.md.
 on:
   push:
-    branches: [dev, qa, prod]
+    branches: [dev, qa, main]
 
 permissions:
   contents: read
@@ -19,12 +20,21 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   deploy:
-    name: Build, push, and deploy (${{ github.ref_name }})
+    name: Build, push, and deploy (${{ github.ref_name == 'main' && 'prod' || github.ref_name }})
     needs: ci
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name }}
+    environment: ${{ github.ref_name == 'main' && 'prod' || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve environment name
+        id: env
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "name=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -38,7 +48,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          tags: ghcr.io/${{ github.repository }}:${{ steps.env.outputs.name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -48,13 +58,13 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          envs: GITHUB_REPOSITORY,GITHUB_ACTOR,GITHUB_TOKEN,GITHUB_REF_NAME,SSH_APP_PORT,SSH_DEPLOY_PATH,SSH_OLLAMA_MODEL
+          envs: GITHUB_REPOSITORY,GITHUB_ACTOR,GITHUB_TOKEN,SSH_IMAGE_TAG,SSH_APP_PORT,SSH_DEPLOY_PATH,SSH_OLLAMA_MODEL
           script: |
             set -euo pipefail
             cd "${SSH_DEPLOY_PATH}"
             echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
             export IMAGE="ghcr.io/${GITHUB_REPOSITORY}"
-            export IMAGE_TAG="${GITHUB_REF_NAME}"
+            export IMAGE_TAG="${SSH_IMAGE_TAG}"
             export APP_PORT="${SSH_APP_PORT}"
             docker compose pull app
             docker compose up -d
@@ -64,7 +74,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
+          SSH_IMAGE_TAG: ${{ steps.env.outputs.name }}
           SSH_APP_PORT: ${{ secrets.APP_PORT }}
           SSH_DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           SSH_OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL }}

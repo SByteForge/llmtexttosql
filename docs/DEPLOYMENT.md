@@ -7,16 +7,23 @@ RAM to hold the model resident — see `docs/ARCHITECTURE.md` for why.
 
 ## Branch -> environment mapping
 
+**`main` is prod.** There is no separate `prod` branch — `main` already
+means "what's live" on GitHub by convention, so a second branch claiming
+the same thing would just be a second source of truth waiting to drift
+from the first. `dev` and `qa` are the only branches added on top of it.
+
 | Branch | GitHub Environment | Typical use |
 |---|---|---|
 | `dev`  | `dev`  | Every push auto-deploys. Break things here. |
 | `qa`   | `qa`   | Promoted from `dev` via PR once CI is green. Test signoff happens here. |
-| `prod` | `prod` | Promoted from `qa` via PR. Should require manual approval before deploy (see below). |
+| `main` | `prod` | Promoted from `qa` via PR. Should require manual approval before deploy (see below). |
 
 Pushing to any of these three branches triggers `.github/workflows/deploy.yml`,
 which runs the full CI suite (`ci.yml`) first, then builds and pushes a
 Docker image to GHCR and SSHes into the matching environment's server to
-redeploy. If CI fails, nothing gets built or deployed.
+redeploy. If CI fails, nothing gets built or deployed. The workflow maps
+`main` -> the `prod` GitHub Environment (and image tag `:prod`) explicitly,
+since the branch name and the environment name intentionally differ here.
 
 ## One-time setup (you do this, not me)
 
@@ -39,7 +46,8 @@ cd ~/llmtexttosql-<env>
 ### 2. Create GitHub Environments and secrets
 
 Repo Settings > Environments > New environment, once each for `dev`, `qa`,
-`prod`. In each one, add these **secrets**:
+`prod` (yes, `prod` — even though the branch that deploys to it is `main`).
+In each one, add these **secrets**:
 
 | Secret | Value |
 |---|---|
@@ -59,7 +67,7 @@ And optionally this **variable** (not secret):
 
 Repo Settings > Environments > `prod` > **Required reviewers** — add
 yourself or a teammate. GitHub will then pause the `deploy` job on every
-push to `prod` until someone approves it in the Actions UI — this is a
+push to `main` until someone approves it in the Actions UI — this is a
 second, deploy-time gate on top of the branch-protection PR review.
 
 ### 4. Enable branch protection / required status checks
@@ -67,16 +75,16 @@ second, deploy-time gate on top of the branch-protection PR review.
 Run `scripts/setup-branch-protection.sh <owner>/<repo>` from a machine with
 `gh` authenticated as a repo admin. It requires the `Lint & test` and
 `Docker image builds` CI jobs to pass before any PR can merge into
-dev/qa/prod, plus a review requirement on qa/prod. See the script itself for
+dev/qa/main, plus a review requirement on qa/main. See the script itself for
 exactly what it sets and what you still have to do by hand (Environments
 aren't settable via the branch-protection API).
 
 ## Promotion flow
 
 ```
-feature branch → PR → dev   (CI required)
-dev             → PR → qa   (CI + 1 review required)
-qa              → PR → prod (CI + 1 review required + manual deploy approval)
+feature branch → PR → dev    (CI required)
+dev             → PR → qa    (CI + 1 review required)
+qa              → PR → main  (CI + 1 review required + manual deploy approval)
 ```
 
 ## First deploy / redeploy manually

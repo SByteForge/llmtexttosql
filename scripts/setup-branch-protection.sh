@@ -6,9 +6,10 @@
 #
 # What this does:
 #   - Requires the CI workflow's two jobs (lint-and-test, docker-build) to
-#     pass before a PR can merge into dev/qa/prod.
-#   - Requires at least 1 PR approval before merging into qa/prod (prod
-#     also blocks pushing directly to the branch - PR-only).
+#     pass before a PR can merge into dev/qa/main.
+#   - Requires at least 1 PR approval before merging into qa/main. `main`
+#     IS prod - there is no separate `prod` branch, so this is the gate
+#     for what ships live.
 #   - Requires branches to be up to date with the base branch before merge.
 #
 # Usage:
@@ -48,11 +49,12 @@ protect_branch "dev" 0
 # qa: CI must pass + 1 reviewer
 protect_branch "qa" 1
 
-# prod: CI must pass + 1 reviewer. Combine this with a required-reviewer
-# rule on the "prod" GitHub Environment (Settings > Environments > prod >
-# Required reviewers) for a second, deploy-time approval gate - branch
-# protection alone only gates the merge, not the deploy job itself.
-protect_branch "prod" 1
+# main (= prod): CI must pass + 1 reviewer. Combine this with a
+# required-reviewer rule on the "prod" GitHub Environment (Settings >
+# Environments > prod > Required reviewers) for a second, deploy-time
+# approval gate - branch protection alone only gates the merge, not the
+# deploy job itself.
+protect_branch "main" 1
 
 echo
 echo "Done. Verify at: https://github.com/${REPO}/settings/branches"
@@ -60,7 +62,8 @@ echo
 echo "Still needed (branch protection can't set these via this API call):"
 echo "  1. Settings > Environments > create 'dev', 'qa', 'prod', each with"
 echo "     secrets: SSH_HOST, SSH_USER, SSH_KEY, DEPLOY_PATH, APP_PORT"
-echo "     (and optional var: OLLAMA_MODEL)"
+echo "     (and optional var: OLLAMA_MODEL). The 'prod' Environment is used"
+echo "     when deploying the 'main' branch - deploy.yml maps main->prod."
 echo "  2. Settings > Environments > prod > Required reviewers - add"
 echo "     yourself/teammates so every prod deploy needs manual approval"
 echo "     in addition to the CI checks and PR review."
